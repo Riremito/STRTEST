@@ -25,45 +25,56 @@ bool rotatel(BYTE *key, BYTE seed) {
 		return false;
 	}
 
-	if (!seed) {
-		return false;
-	}
-
-	if (8 <= seed) {
-		ULONG_PTR shift_1 = (seed >> 3) % StringPool__ms_nKeySize;
-		for (int i = 0; i < StringPool__ms_nKeySize; i++) {
-			key[i] = StringPool__ms_aKey[(i + shift_1) % StringPool__ms_nKeySize];
-		}
-	}
-
-	BYTE bit = 0;
-	if (seed & 7) {
-		ULONG_PTR shift_2 = (seed & 7);
-		bit = (BYTE)(key[0] >> (8 - shift_2));
-		for (int i = 0; i < StringPool__ms_nKeySize; i++) {
-			BYTE left = 0;
-			if (i != (StringPool__ms_nKeySize - 1)) {
-				left = (BYTE)(key[i + 1] >> (8 - shift_2));
+	// rotate
+	if ((seed >> 3)) {
+		BYTE shift = (seed >> 3) % StringPool__ms_nKeySize;
+		if (shift) {
+			for (int i = 0; i < StringPool__ms_nKeySize; i++) {
+				key[i] = StringPool__ms_aKey[(i + shift) % StringPool__ms_nKeySize];
 			}
-			BYTE right =  (BYTE)(key[i] << shift_2);
-			key[i] = left | right;
+		}
+	}
+	else {
+		// no rotate
+		for (int i = 0; i < StringPool__ms_nKeySize; i++) {
+			key[i] = StringPool__ms_aKey[i];
 		}
 	}
 
-	key[StringPool__ms_nKeySize - 1] |= bit;
+	// generate key
+	if (seed & 7) {
+		BYTE shift = seed & 7;
+		if (shift) {
+			BYTE bit = 0;
+			bit = (BYTE)(key[0] >> (8 - shift));
+
+			for (int i = 0; i < StringPool__ms_nKeySize; i++) {
+				BYTE left = 0;
+				if (i != (StringPool__ms_nKeySize - 1)) {
+					left = (BYTE)(key[i + 1] >> (8 - shift));
+				}
+				BYTE right = (BYTE)(key[i] << shift);
+				key[i] = left | right;
+			}
+			key[StringPool__ms_nKeySize - 1] |= bit;
+		}
+	}
+
 	return true;
 }
 
 int DecodeStringPool(StringPoolData *spd, std::vector<BYTE> &decrypted_string) {
 	BYTE key[StringPool__ms_nKeySize] = { 0 };
 	// generate decryption key
-	if (!rotatel(key, spd->seed)) {
-		//puts("KEY ERR");
+	if (!rotatel(key, spd->seed & ~0x80)) {
 		return 1;
 	}
 
 	for (int i = 0; spd->encrypted_string[i]; i++) {
-		BYTE chr = spd->encrypted_string[i] ^ key[i % 0x10];
+		BYTE chr = spd->encrypted_string[i];
+		if (chr != key[i % 0x10]) {
+			chr ^= key[i % 0x10];
+		}
 		// CRLF check
 		switch (chr) {
 		case '\r': {
@@ -74,6 +85,11 @@ int DecodeStringPool(StringPoolData *spd, std::vector<BYTE> &decrypted_string) {
 		case '\n': {
 			decrypted_string.push_back('\\');
 			decrypted_string.push_back('n');
+			break;
+		}
+		case '\t': {
+			decrypted_string.push_back('\\');
+			decrypted_string.push_back('t');
 			break;
 		}
 		default:
@@ -88,11 +104,14 @@ int DecodeStringPool(StringPoolData *spd, std::vector<BYTE> &decrypted_string) {
 
 	// length check
 	if (decrypted_string[0] == '\0') {
-		//puts("EMPTY STR ERR");
+		printf(" (KEY: ");
+		for (auto &v : key) {
+			printf("%02X ", v);
+		}
+		printf(")\n");
 		return 2;
 	}
 
-	//printf("%s\n", &decrypted_sting[0]);
 	return 0;
 }
 // CP_ACP
@@ -129,7 +148,37 @@ bool toUTF8(UINT codepage, std::vector<BYTE> &str, std::string &utf8, std::wstri
 	return true;
 }
 
+void errcheck(ULONG_PTR *StringPoolArray, Frost &f) {
+	for (int i = 0; i < StringPool_Size; i++) {
+		StringPoolData *spd = (StringPoolData *)f.GetRawAddress(StringPoolArray[i]);
+		std::vector<BYTE> decrypted_string;
+		int err = DecodeStringPool(spd, decrypted_string);
+		if (err) {
+			printf("%d : %llX : err = %d\n", i, StringPoolArray[i], err);
+		}
+	}
+}
+
+void checkindex(ULONG_PTR *StringPoolArray, Frost &f, int index) {
+	StringPoolData *spd = (StringPoolData *)f.GetRawAddress(StringPoolArray[index]);
+	std::vector<BYTE> decrypted_string;
+	int err = DecodeStringPool(spd, decrypted_string);
+	if (err == 0) {
+		std::string text = std::string((char *)&decrypted_string[0]);
+		printf("%d : %llX : %s", index, StringPoolArray[index], text.c_str());
+		printf(" (HEX: ");
+		for (auto &v : decrypted_string) {
+			printf("%02X ", v);
+		}
+		printf(")\n");
+	}
+	else {
+		printf("%d : %llX : err = %d\n", index, StringPoolArray[index], err);
+	}
+}
+
 int wmain(int argc, wchar_t **argv) {
+	/*
 	if (argc < 2) {
 		puts("drop exe client file please.");
 		system("pause");
@@ -137,9 +186,13 @@ int wmain(int argc, wchar_t **argv) {
 	}
 
 	Frost f(argv[1]);
+	*/
 	SetConsoleOutputCP(CP_UTF8);
 
-	//Frost f(TEST_EXE_PATH_2);
+	Frost f(TEST_EXE_PATH_2);
+	//f.Parse();
+	//f.test();
+	//return 1;
 
 	if (!f.Parse()) {
 		puts("Parse err");
@@ -148,17 +201,16 @@ int wmain(int argc, wchar_t **argv) {
 	}
 
 	ULONG_PTR *StringPoolArray = (ULONG_PTR *)f.GetRawAddress(StringPool__ms_aString);
+
+	//checkindex(StringPoolArray, f , 99);
+	//errcheck(StringPoolArray, f);
+	//return 1;
+
 	for (int i = 0; i < StringPool_Size; i++) {
 		StringPoolData *spd = (StringPoolData *)f.GetRawAddress(StringPoolArray[i]);
 		std::vector<BYTE> decrypted_string;
 		int err = DecodeStringPool(spd, decrypted_string);
 		if (err == 0) {
-			/*
-			for (auto &v : decrypted_string) {
-				printf("%02X ", v);
-			}
-			printf("\n");
-			*/
 			std::string text = std::string((char *)&decrypted_string[0]);
 			printf("%d : %llX : %s", i, StringPoolArray[i], text.c_str());
 			printf(" (HEX: ");
@@ -172,6 +224,6 @@ int wmain(int argc, wchar_t **argv) {
 		}
 	}
 
-	system("pause");
+	//system("pause");
 	return 0;
 }

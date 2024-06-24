@@ -86,9 +86,6 @@ bool Frost::Parse() {
 		ImageBase = ioh64->ImageBase;
 		// section info
 		for (WORD i = 0; i < inh->FileHeader.NumberOfSections; i++) {
-			//char section_name[9] = { 0 };
-			//memcpy_s(section_name, 8, ish[i].Name, 8);
-			//printf("%d : \"%s\"\n", i, section_name);
 			image_section_headers.push_back(ish[i]);
 		}
 	}
@@ -114,6 +111,14 @@ ULONG_PTR Frost::GetRawAddress(ULONG_PTR uVirtualAddress) {
 		}
 	}
 	return 0;
+}
+
+void Frost::test() {
+	for (auto &v : image_section_headers) {
+		char section_name[9] = { 0 };
+		memcpy_s(section_name, 8, v.Name, 8);
+		printf("%llX : \"%s\"\n", ImageBase + v.VirtualAddress ,section_name);
+	}
 }
 
 // private

@@ -25,6 +25,7 @@ public:
 	~Frost();
 	bool Parse();
 	ULONG_PTR GetRawAddress(ULONG_PTR uVirtualAddress);
+	void test();
 };
 
 #endif
