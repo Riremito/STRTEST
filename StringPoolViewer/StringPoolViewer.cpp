@@ -210,6 +210,7 @@ enum SubControl {
 	BUTTON_AOBSCAN,
 	BUTTON_LOAD,
 	TEXTAREA_INFO,
+	BUTTON_DUMP,
 };
 
 enum ListViewIndex {
@@ -262,6 +263,7 @@ typedef struct {
 } ThreadArg;
 
 ThreadArg gThreadArg;
+std::vector<std::wstring> dumpdata;
 bool LoadDataThread() {
 	Alice &a = *gThreadArg.a;
 	std::wstring path = gThreadArg.path;
@@ -271,6 +273,7 @@ bool LoadDataThread() {
 
 	a.ListView_Clear(LISTVIEW_VIEWER);
 	a.SetText(TEXTAREA_INFO, L"Loading StringPool Data...");
+	dumpdata.clear();
 
 	Frost f(path.c_str());
 
@@ -292,11 +295,13 @@ bool LoadDataThread() {
 			std::wstring wtext;
 			to_wstring(codepage, decrypted_string, wtext);
 			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_STRING, L"\"" + wtext + L"\"");
+			dumpdata.push_back(std::to_wstring(i) + L" | " + QWORDtoString(StringPoolArray[i]) + L" | " + L"\"" + wtext + L"\"");
 		}
 		else {
 			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_ID, std::to_wstring(i));
 			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_VA, QWORDtoString(StringPoolArray[i]));
 			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_STRING, L"ERROR = " + std::to_wstring(err));
+			dumpdata.push_back(std::to_wstring(i) + L" | " + QWORDtoString(StringPoolArray[i]) + L" | " + L"ERROR = " + std::to_wstring(err));
 		}
 	}
 
@@ -342,7 +347,7 @@ bool OnCreate(Alice &a) {
 	a.EditBox(EDIT_ADDR_ARRAY, 450, 470, L"1474C4240", 300);
 	a.EditBox(EDIT_ADDR_CODEPAGE,   450, 490, L"65001", 300);
 	a.EditBox(EDIT_ADDR_SIZE,  450, 510, L"17168", 300);
-	//a.Button(BUTTON_AOBSCAN, L"AobScan", 640, 530, 50);
+	a.Button(BUTTON_DUMP, L"Dump", 640, 530, 50);
 	a.Button(BUTTON_LOAD, L"Load", 700, 530, 50);
 	return true;
 }
@@ -357,6 +362,18 @@ bool OnCommand(Alice &a, int nIDDlgItem) {
 		std::wstring text_size = a.GetText(EDIT_ADDR_SIZE);
 		a.ListView_Clear(LISTVIEW_VIEWER);
 		LoadData(a, path, addr_array, _wtoi(text_size.c_str()), _wtoi(text_cp.c_str()));
+		return true;
+	}
+	if (nIDDlgItem == BUTTON_DUMP && dumpdata.size() && gThreadArg.OK == true) {
+		a.SetText(TEXTAREA_INFO, L"Dumping StringPool Data...");
+		FILE *fp = NULL;
+		if (fopen_s(&fp, "StringPoolDump.txt", "wb") == 0) {
+			for (auto &v : dumpdata) {
+				fwprintf_s(fp, L"%s\n", v.c_str());
+			}
+			fclose(fp);
+		}
+		a.SetText(TEXTAREA_INFO, L"StringPool is dumped!");
 		return true;
 	}
 	return true;
