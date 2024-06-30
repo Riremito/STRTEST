@@ -237,25 +237,45 @@ bool LoadData(Alice &a) {
 		int err = DecodeStringPool(spd, decrypted_string);
 		if (err == 0) {
 			std::string text = std::string((char *)&decrypted_string[0]);
-			a.ListView_AddItem(LISTVIEW_VIEWER, LV_ID, std::to_wstring(i));
-			a.ListView_AddItem(LISTVIEW_VIEWER, LV_VA, QWORDtoString(StringPoolArray[i]));
+			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_ID, std::to_wstring(i));
+			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_VA, QWORDtoString(StringPoolArray[i]));
 			std::wstring wtext;
 			to_wstring(CP_UTF8, decrypted_string, wtext);
-			a.ListView_AddItem(LISTVIEW_VIEWER, LV_STRING, L"\"" + wtext + L"\"");
+			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_STRING, L"\"" + wtext + L"\"");
 		}
 		else {
-			a.ListView_AddItem(LISTVIEW_VIEWER, LV_ID, std::to_wstring(i));
-			a.ListView_AddItem(LISTVIEW_VIEWER, LV_VA, QWORDtoString(StringPoolArray[i]));
-			a.ListView_AddItem(LISTVIEW_VIEWER, LV_STRING, L"ERROR = " + std::to_wstring(err));
+			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_ID, std::to_wstring(i));
+			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_VA, QWORDtoString(StringPoolArray[i]));
+			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_STRING, L"ERROR = " + std::to_wstring(err));
 		}
 	}
 	return true;
 }
 
-bool LoadData(Alice &a, std::wstring path, ULONG_PTR uStringPoolArrayAddr, int ArraySize, UINT codepage) {
+typedef struct {
+	bool OK;
+	Alice *a;
+	std::wstring path;
+	ULONG_PTR uStringPoolArrayAddr;
+	int ArraySize;
+	UINT codepage;
+} ThreadArg;
+
+ThreadArg gThreadArg;
+bool LoadDataThread() {
+	Alice &a = *gThreadArg.a;
+	std::wstring path = gThreadArg.path;
+	ULONG_PTR uStringPoolArrayAddr = gThreadArg.uStringPoolArrayAddr;
+	int ArraySize = gThreadArg.ArraySize;
+	UINT codepage = gThreadArg.codepage;
+
+	a.ListView_Clear(LISTVIEW_VIEWER);
+	a.SetText(TEXTAREA_INFO, L"Loading StringPool Data...");
+
 	Frost f(path.c_str());
 
 	if (!f.Parse()) {
+		a.SetText(TEXTAREA_INFO, L"unable to open exe file.");
 		return false;
 	}
 
@@ -267,18 +287,40 @@ bool LoadData(Alice &a, std::wstring path, ULONG_PTR uStringPoolArrayAddr, int A
 		int err = DecodeStringPool(spd, decrypted_string);
 		if (err == 0) {
 			std::string text = std::string((char *)&decrypted_string[0]);
-			a.ListView_AddItem(LISTVIEW_VIEWER, LV_ID, std::to_wstring(i));
-			a.ListView_AddItem(LISTVIEW_VIEWER, LV_VA, QWORDtoString(StringPoolArray[i]));
+			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_ID, std::to_wstring(i));
+			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_VA, QWORDtoString(StringPoolArray[i]));
 			std::wstring wtext;
 			to_wstring(codepage, decrypted_string, wtext);
-			a.ListView_AddItem(LISTVIEW_VIEWER, LV_STRING, L"\"" + wtext + L"\"");
+			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_STRING, L"\"" + wtext + L"\"");
 		}
 		else {
-			a.ListView_AddItem(LISTVIEW_VIEWER, LV_ID, std::to_wstring(i));
-			a.ListView_AddItem(LISTVIEW_VIEWER, LV_VA, QWORDtoString(StringPoolArray[i]));
-			a.ListView_AddItem(LISTVIEW_VIEWER, LV_STRING, L"ERROR = " + std::to_wstring(err));
+			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_ID, std::to_wstring(i));
+			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_VA, QWORDtoString(StringPoolArray[i]));
+			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_STRING, L"ERROR = " + std::to_wstring(err));
 		}
 	}
+
+	gThreadArg.OK = true;
+	a.SetText(TEXTAREA_INFO, L"String Pool is loaded! OK!");
+	return true;
+}
+bool LoadData(Alice &a, std::wstring path, ULONG_PTR uStringPoolArrayAddr, int ArraySize, UINT codepage) {
+	if (!gThreadArg.OK) {
+		return false;
+	}
+
+	gThreadArg.OK = false;
+	gThreadArg.a = &a;
+	gThreadArg.path = path;
+	gThreadArg.uStringPoolArrayAddr = uStringPoolArrayAddr;
+	gThreadArg.ArraySize = ArraySize;
+	gThreadArg.codepage = codepage;
+
+	HANDLE hThread = CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)LoadDataThread, NULL, NULL, NULL);
+	if (hThread) {
+		CloseHandle(hThread);
+	}
+
 	return true;
 }
 
@@ -337,6 +379,7 @@ bool OnNotify(Alice &a, int nIDDlgItem) {
 }
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow) {
+	gThreadArg.OK = true;
 	Alice a(L"StringPoolViewerClass", L"StringPoolViewer test ver", 800, 600, hInstance);
 	a.SetOnCreate(OnCreate);
 	a.SetOnCommand(OnCommand);

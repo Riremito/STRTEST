@@ -97,6 +97,7 @@ private:
 public:
 	bool ListView_AddHeader(size_t nIDDlgItem, std::wstring wHeader, int Width);
 	bool ListView_AddItem(size_t nIDDlgItem, int index, std::wstring wText);
+	bool ListView_AddItemWOS(size_t nIDDlgItem, int index, std::wstring wText);
 	bool ListView_UpdateItem(size_t nIDDlgItem, int index, int line, std::wstring wText);
 	bool ListView_Clear(size_t nIDDlgItem);
 	bool ListView_Copy(size_t nIDDlgItem, int index, std::wstring &wText, bool block = false, size_t size = 256);
