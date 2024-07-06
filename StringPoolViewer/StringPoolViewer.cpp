@@ -349,6 +349,7 @@ bool OnCreate(Alice &a) {
 	a.EditBox(EDIT_ADDR_SIZE,  450, 510, L"17168", 300);
 	a.Button(BUTTON_DUMP, L"Dump", 640, 530, 50);
 	a.Button(BUTTON_LOAD, L"Load", 700, 530, 50);
+	DragAcceptFiles(a.GetMainHWND(), TRUE);
 	return true;
 }
 
@@ -395,12 +396,18 @@ bool OnNotify(Alice &a, int nIDDlgItem) {
 	return true;
 }
 
+bool OnDropFile(Alice &a, wchar_t *drop) {
+	a.SetText(EDIT_PATH, drop);
+	return true;
+}
+
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow) {
 	gThreadArg.OK = true;
 	Alice a(L"StringPoolViewerClass", L"StringPoolViewer test ver", 800, 600, hInstance);
 	a.SetOnCreate(OnCreate);
 	a.SetOnCommand(OnCommand);
 	a.SetOnNotify(OnNotify);
+	a.SetOnDropFile(OnDropFile);
 	a.Run();
 	a.Wait();
 	return 0;

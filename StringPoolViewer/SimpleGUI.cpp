@@ -26,6 +26,7 @@ Alice::Alice(std::wstring wClassName, std::wstring wWindowName, int nWidth, int 
 	SetOnCreate(NULL);
 	SetOnCommand(NULL);
 	SetOnNotify(NULL);
+	SetOnDropFile(NULL);
 	SetCallback(NULL, CT_UNDEFINED);
 }
 
@@ -123,6 +124,15 @@ LRESULT CALLBACK Alice::AliceProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lPa
 			if (nh->code == LVN_ITEMCHANGED) {
 				a->OnNotify(*a, LOWORD(wParam));
 			}
+		}
+		break;
+	}
+	case WM_DROPFILES: {
+		if (a) {
+			wchar_t drop[MAX_PATH] = { 0 };
+			DragQueryFileW((HDROP)wParam, 0, drop, _countof(drop) - 1);
+			DragFinish((HDROP)wParam);
+			a->OnDropFile(*a, drop);
 		}
 		break;
 	}

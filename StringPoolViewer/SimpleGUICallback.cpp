@@ -16,6 +16,12 @@ bool Alice::SetOnNotify(bool (*function)(Alice&, int)) {
 	return true;
 }
 
+
+bool Alice::SetOnDropFile(bool(*function)(Alice&, wchar_t*)) {
+	on_dropfile = function;
+	return true;
+}
+
 bool Alice::SetCallback(decltype(DefWindowProcW) *function , CallbackType ct) {
 	manual_callback = function;
 	callback_type = ct;
@@ -58,6 +64,14 @@ bool Alice::OnNotify(Alice &a, int nIDDlgItem) {
 	}
 
 	return on_notify(a, nIDDlgItem);
+}
+
+bool Alice::OnDropFile(Alice &a, wchar_t *drop) {
+	if (!on_dropfile) {
+		return false;
+	}
+
+	return on_dropfile(a, drop);
 }
 
 

@@ -44,9 +44,11 @@ private:
 	bool (*on_create)(Alice&);
 	bool (*on_command)(Alice&, int);
 	bool (*on_notify)(Alice&, int);
+	bool (*on_dropfile)(Alice&, wchar_t*);
 	bool OnCreate(Alice &a);
 	bool OnCommand(Alice &a, int nIDDlgItem);
 	bool OnNotify(Alice &a, int nIDDlgItem);
+	bool OnDropFile(Alice &a, wchar_t *drop);
 
 	decltype(DefWindowProcW) *manual_callback;
 	CallbackType callback_type;
@@ -55,6 +57,7 @@ public:
 	bool SetOnCreate(bool(*function)(Alice&));
 	bool SetOnCommand(bool(*function)(Alice&, int));
 	bool SetOnNotify(bool(*function)(Alice&, int));
+	bool SetOnDropFile(bool(*function)(Alice&, wchar_t*));
 	bool SetCallback(decltype(DefWindowProcW) *function, CallbackType ct);
 	CallbackType GetCallbackType();
 	LRESULT CALLBACK Callback(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
