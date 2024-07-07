@@ -1,111 +1,13 @@
 // https://github.com/Riremito/tools/tree/develop
 #include"Simple.h"
 #include"Frost.h"
-
-#define TEST_EXE_PATH_2 L"C:\\Users\\elfenlied\\Desktop\\Elfenlied\\IDB\\unpacked_MapleStory261.4.exe"
+#include"StringPool.h"
 
 // string pool part
 BYTE StringPool__ms_aKey[16] = { 0xD6,0xDE,0x75,0x86,0x46,0x64,0xA3,0x71,0xE8,0xE6,0x7B,0xD3,0x33,0x30,0xE7,0x2E };
 const int StringPool__ms_nKeySize = sizeof(StringPool__ms_aKey);
 ULONG_PTR StringPool__ms_aString = 0x1474C4240;
 int StringPool_Size = 17168;
-
-#pragma pack(1)
-typedef struct {
-	BYTE seed;
-	BYTE encrypted_string[1];
-} StringPoolData;
-#pragma pack()
-
-bool rotatel(BYTE *key, BYTE seed) {
-	if (!StringPool__ms_nKeySize) {
-		return false;
-	}
-
-	// rotate
-	if ((seed >> 3)) {
-		BYTE shift = (seed >> 3) % StringPool__ms_nKeySize;
-		if (shift) {
-			for (int i = 0; i < StringPool__ms_nKeySize; i++) {
-				key[i] = StringPool__ms_aKey[(i + shift) % StringPool__ms_nKeySize];
-			}
-		}
-	}
-	else {
-		// no rotate
-		for (int i = 0; i < StringPool__ms_nKeySize; i++) {
-			key[i] = StringPool__ms_aKey[i];
-		}
-	}
-
-	// generate key
-	if (seed & 7) {
-		BYTE shift = seed & 7;
-		if (shift) {
-			BYTE bit = 0;
-			bit = (BYTE)(key[0] >> (8 - shift));
-
-			for (int i = 0; i < StringPool__ms_nKeySize; i++) {
-				BYTE left = 0;
-				if (i != (StringPool__ms_nKeySize - 1)) {
-					left = (BYTE)(key[i + 1] >> (8 - shift));
-				}
-				BYTE right = (BYTE)(key[i] << shift);
-				key[i] = left | right;
-			}
-			key[StringPool__ms_nKeySize - 1] |= bit;
-		}
-	}
-
-	return true;
-}
-
-int DecodeStringPool(StringPoolData *spd, std::vector<BYTE> &decrypted_string) {
-	BYTE key[StringPool__ms_nKeySize] = { 0 };
-	// generate decryption key
-	if (!rotatel(key, spd->seed & ~0x80)) {
-		return 1;
-	}
-
-	for (int i = 0; spd->encrypted_string[i]; i++) {
-		BYTE chr = spd->encrypted_string[i];
-		if (chr != key[i % 0x10]) {
-			chr ^= key[i % 0x10];
-		}
-		// CRLF check
-		switch (chr) {
-		case '\r': {
-			decrypted_string.push_back('\\');
-			decrypted_string.push_back('r');
-			break;
-		}
-		case '\n': {
-			decrypted_string.push_back('\\');
-			decrypted_string.push_back('n');
-			break;
-		}
-		case '\t': {
-			decrypted_string.push_back('\\');
-			decrypted_string.push_back('t');
-			break;
-		}
-		default:
-		{
-			decrypted_string.push_back(chr);
-			break;
-		}
-		}
-	}
-	// null terminating
-	decrypted_string.push_back('\0');
-
-	// length check
-	if (decrypted_string[0] == '\0') {
-		return 2;
-	}
-
-	return 0;
-}
 
 // data to string part
 std::wstring BYTEtoString(BYTE b) {
@@ -223,36 +125,6 @@ enum ListViewIndex {
 #define VIEWER_WIDTH 800
 #define VIEWER_HEIGHT 600
 
-bool LoadData(Alice &a) {
-	Frost f(TEST_EXE_PATH_2);
-
-	if (!f.Parse()) {
-		return false;
-	}
-
-	ULONG_PTR *StringPoolArray = (ULONG_PTR *)f.GetRawAddress(StringPool__ms_aString);
-
-	for (int i = 0; i < StringPool_Size; i++) {
-		StringPoolData *spd = (StringPoolData *)f.GetRawAddress(StringPoolArray[i]);
-		std::vector<BYTE> decrypted_string;
-		int err = DecodeStringPool(spd, decrypted_string);
-		if (err == 0) {
-			std::string text = std::string((char *)&decrypted_string[0]);
-			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_ID, std::to_wstring(i));
-			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_VA, QWORDtoString(StringPoolArray[i]));
-			std::wstring wtext;
-			to_wstring(CP_UTF8, decrypted_string, wtext);
-			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_STRING, L"\"" + wtext + L"\"");
-		}
-		else {
-			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_ID, std::to_wstring(i));
-			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_VA, QWORDtoString(StringPoolArray[i]));
-			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_STRING, L"ERROR = " + std::to_wstring(err));
-		}
-	}
-	return true;
-}
-
 typedef struct {
 	bool OK;
 	Alice *a;
@@ -278,31 +150,21 @@ bool LoadDataThread() {
 	Frost f(path.c_str());
 
 	if (!f.Parse()) {
+		gThreadArg.OK = true;
 		a.SetText(TEXTAREA_INFO, L"unable to open exe file.");
 		return false;
 	}
 
 	ULONG_PTR *StringPoolArray = (ULONG_PTR *)f.GetRawAddress(uStringPoolArrayAddr);
+	StringPool sp(CP_UTF8, StringPool__ms_aKey, 16);
 
 	for (int i = 0; i < ArraySize; i++) {
 		StringPoolData *spd = (StringPoolData *)f.GetRawAddress(StringPoolArray[i]);
-		std::vector<BYTE> decrypted_string;
-		int err = DecodeStringPool(spd, decrypted_string);
-		if (err == 0) {
-			std::string text = std::string((char *)&decrypted_string[0]);
-			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_ID, std::to_wstring(i));
-			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_VA, QWORDtoString(StringPoolArray[i]));
-			std::wstring wtext;
-			to_wstring(codepage, decrypted_string, wtext);
-			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_STRING, L"\"" + wtext + L"\"");
-			dumpdata.push_back(std::to_wstring(i) + L" | " + QWORDtoString(StringPoolArray[i]) + L" | " + L"\"" + wtext + L"\"");
-		}
-		else {
-			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_ID, std::to_wstring(i));
-			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_VA, QWORDtoString(StringPoolArray[i]));
-			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_STRING, L"ERROR = " + std::to_wstring(err));
-			dumpdata.push_back(std::to_wstring(i) + L" | " + QWORDtoString(StringPoolArray[i]) + L" | " + L"ERROR = " + std::to_wstring(err));
-		}
+		std::wstring wtext = sp.DecodeWStr(spd);
+		a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_ID, std::to_wstring(i));
+		a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_VA, QWORDtoString(StringPoolArray[i]));
+		a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_STRING, L"\"" + wtext + L"\"");
+		dumpdata.push_back(std::to_wstring(i) + L" | " + QWORDtoString(StringPoolArray[i]) + L" | " + L"\"" + wtext + L"\"");
 	}
 
 	gThreadArg.OK = true;
@@ -343,13 +205,12 @@ bool OnCreate(Alice &a) {
 	a.StaticText(STATIC_ADDR_ARRAY, L"Array :", 400, 470);
 	a.StaticText(STATIC_ADDR_CODEPAGE,   L"CP    :", 400, 490);
 	a.StaticText(STATIC_ADDR_SIZE,  L"Size  :", 400, 510);
-	a.EditBox(EDIT_PATH,       450, 450, TEST_EXE_PATH_2, 300);
+	a.EditBox(EDIT_PATH,       450, 450, L"Please Drop File", 300);
 	a.EditBox(EDIT_ADDR_ARRAY, 450, 470, L"1474C4240", 300);
 	a.EditBox(EDIT_ADDR_CODEPAGE,   450, 490, L"65001", 300);
 	a.EditBox(EDIT_ADDR_SIZE,  450, 510, L"17168", 300);
 	a.Button(BUTTON_DUMP, L"Dump", 640, 530, 50);
 	a.Button(BUTTON_LOAD, L"Load", 700, 530, 50);
-	DragAcceptFiles(a.GetMainHWND(), TRUE);
 	return true;
 }
 
@@ -403,7 +264,7 @@ bool OnDropFile(Alice &a, wchar_t *drop) {
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow) {
 	gThreadArg.OK = true;
-	Alice a(L"StringPoolViewerClass", L"StringPoolViewer test ver", 800, 600, hInstance);
+	Alice a(L"StringPoolViewerClass", L"StringPool Viewer", 800, 600, hInstance);
 	a.SetOnCreate(OnCreate);
 	a.SetOnCommand(OnCommand);
 	a.SetOnNotify(OnNotify);

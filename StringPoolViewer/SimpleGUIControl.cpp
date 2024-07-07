@@ -206,7 +206,7 @@ LRESULT Alice::CheckBoxStatus(size_t nIDDlgItem) {
 
 // private
 bool Alice::SetFont(size_t nIDDlgItem) {
-	static HFONT font = CreateFontW(12, NULL, NULL, NULL, FW_NORMAL, NULL, NULL, NULL, SHIFTJIS_CHARSET, NULL, NULL, NULL, NULL, L"ÇlÇr ÉSÉVÉbÉN");
+	static HFONT font = CreateFontW(12, NULL, NULL, NULL, FW_NORMAL, NULL, NULL, NULL, SHIFTJIS_CHARSET, NULL, NULL, NULL, NULL, L"MS Gothic");
 	if (!font) {
 		return false;
 	}

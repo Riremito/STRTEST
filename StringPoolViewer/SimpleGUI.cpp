@@ -105,6 +105,9 @@ LRESULT CALLBACK Alice::AliceProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lPa
 			Resize(hWnd, cs->cx, cs->cy);
 			a->main_hwnd = hWnd;
 			a->OnCreate(*a);
+			if (a->on_dropfile) {
+				DragAcceptFiles(hWnd, TRUE);
+			}
 			ShowWindow(hWnd, SW_SHOW);
 			SetWindowLongPtrW(hWnd, GWLP_USERDATA, (ULONG_PTR)a);
 		}
