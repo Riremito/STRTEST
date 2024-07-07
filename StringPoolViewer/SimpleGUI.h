@@ -43,10 +43,12 @@ public:
 private:
 	bool (*on_create)(Alice&);
 	bool (*on_command)(Alice&, int);
+	bool (*on_commandex)(Alice&, int, int);
 	bool (*on_notify)(Alice&, int);
 	bool (*on_dropfile)(Alice&, wchar_t*);
 	bool OnCreate(Alice &a);
 	bool OnCommand(Alice &a, int nIDDlgItem);
+	bool OnCommandEx(Alice &a, int nIDDlgItem, int msg);
 	bool OnNotify(Alice &a, int nIDDlgItem);
 	bool OnDropFile(Alice &a, wchar_t *drop);
 
@@ -56,6 +58,7 @@ private:
 public:
 	bool SetOnCreate(bool(*function)(Alice&));
 	bool SetOnCommand(bool(*function)(Alice&, int));
+	bool SetOnCommandEx(bool(*function)(Alice&, int, int));
 	bool SetOnNotify(bool(*function)(Alice&, int));
 	bool SetOnDropFile(bool(*function)(Alice&, wchar_t*));
 	bool SetCallback(decltype(DefWindowProcW) *function, CallbackType ct);
@@ -85,6 +88,11 @@ public:
 	bool AddText(size_t nIDDlgItem, std::wstring wText);
 	std::wstring GetText(size_t nIDDlgItem);
 	LRESULT CheckBoxStatus(size_t nIDDlgItem);
+	bool ComboBoxAdd(size_t nIDDlgItem, std::wstring wText);
+	bool ComboBoxSelect(size_t nIDDlgItem, int index);
+	LRESULT ComboBoxSelected(size_t nIDDlgItem);
+	std::wstring ComboBoxGetText(size_t nIDDlgItem, int index);
+	std::wstring ComboBoxGetSelectedText(size_t nIDDlgItem);
 	bool Embed(HWND hWnd, int nWidth, int nHeight);
 
 	// ListView

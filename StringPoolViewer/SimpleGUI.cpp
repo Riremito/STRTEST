@@ -25,6 +25,7 @@ Alice::Alice(std::wstring wClassName, std::wstring wWindowName, int nWidth, int 
 
 	SetOnCreate(NULL);
 	SetOnCommand(NULL);
+	SetOnCommandEx(NULL);
 	SetOnNotify(NULL);
 	SetOnDropFile(NULL);
 	SetCallback(NULL, CT_UNDEFINED);
@@ -116,7 +117,9 @@ LRESULT CALLBACK Alice::AliceProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lPa
 	case WM_COMMAND:
 	{
 		if (a) {
-			a->OnCommand(*a, LOWORD(wParam));
+			if (!a->OnCommand(*a, LOWORD(wParam))) {
+				a->OnCommandEx(*a, LOWORD(wParam), HIWORD(wParam));
+			}
 		}
 		break;
 	}

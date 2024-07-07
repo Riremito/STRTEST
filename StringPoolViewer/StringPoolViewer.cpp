@@ -107,8 +107,9 @@ enum SubControl {
 	STATIC_ADDR_SIZE,
 	EDIT_PATH,
 	EDIT_ADDR_ARRAY,
-	EDIT_ADDR_CODEPAGE,
+	EDIT_CODEPAGE,
 	EDIT_ADDR_SIZE,
+	COMBOBOX_CODEPAGE,
 	BUTTON_AOBSCAN,
 	BUTTON_LOAD,
 	TEXTAREA_INFO,
@@ -207,20 +208,53 @@ bool OnCreate(Alice &a) {
 	a.StaticText(STATIC_ADDR_SIZE,  L"Size  :", 400, 510);
 	a.EditBox(EDIT_PATH,       450, 450, L"Please Drop File", 300);
 	a.EditBox(EDIT_ADDR_ARRAY, 450, 470, L"1474C4240", 300);
-	a.EditBox(EDIT_ADDR_CODEPAGE,   450, 490, L"65001", 300);
+	a.ComboBox(COMBOBOX_CODEPAGE, 450, 490, 80);
+	a.ComboBoxAdd(COMBOBOX_CODEPAGE, L"BIG5");
+	a.ComboBoxAdd(COMBOBOX_CODEPAGE, L"EUC-KR");
+	a.ComboBoxAdd(COMBOBOX_CODEPAGE, L"GBK");
+	a.ComboBoxAdd(COMBOBOX_CODEPAGE, L"SHIFT-JIS");
+	a.ComboBoxAdd(COMBOBOX_CODEPAGE, L"UTF8");
+	a.ComboBoxSelect(COMBOBOX_CODEPAGE, 0);
+	a.EditBox(EDIT_CODEPAGE, 550, 490, L"65001", 200);
 	a.EditBox(EDIT_ADDR_SIZE,  450, 510, L"17168", 300);
 	a.Button(BUTTON_DUMP, L"Dump", 640, 530, 50);
 	a.Button(BUTTON_LOAD, L"Load", 700, 530, 50);
 	return true;
 }
 
-bool OnCommand(Alice &a, int nIDDlgItem) {
+
+UINT GetCodePage(std::wstring name) {
+	if (name.compare(L"UTF8") == 0) {
+		return CP_UTF8;
+	}
+	if (name.compare(L"SHIFT-JIS") == 0) {
+		return 932;
+	}
+	if (name.compare(L"GBK") == 0) {
+		return 936;
+	}
+	if (name.compare(L"EUC-KR") == 0) {
+		return 949;
+	}
+	if (name.compare(L"BIG5") == 0) {
+		return 950;
+	}
+	return CP_UTF8;
+}
+
+bool OnCommandEx(Alice &a, int nIDDlgItem, int msg) {
+	if (nIDDlgItem == COMBOBOX_CODEPAGE && msg == CBN_SELCHANGE) {
+		std::wstring wtext = a.ComboBoxGetSelectedText(COMBOBOX_CODEPAGE);
+		UINT cp = GetCodePage(wtext);
+		a.SetText(EDIT_CODEPAGE, std::to_wstring(cp));
+		return true;
+	}
 	if (nIDDlgItem == BUTTON_LOAD) {
 		std::wstring path = a.GetText(EDIT_PATH);
 		std::wstring text_array = a.GetText(EDIT_ADDR_ARRAY);
 		ULONG_PTR addr_array = 0;
 		swscanf_s(text_array.c_str(), L"%llX", &addr_array);
-		std::wstring text_cp = a.GetText(EDIT_ADDR_CODEPAGE);
+		std::wstring text_cp = a.GetText(EDIT_CODEPAGE);
 		std::wstring text_size = a.GetText(EDIT_ADDR_SIZE);
 		a.ListView_Clear(LISTVIEW_VIEWER);
 		LoadData(a, path, addr_array, _wtoi(text_size.c_str()), _wtoi(text_cp.c_str()));
@@ -266,7 +300,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 	gThreadArg.OK = true;
 	Alice a(L"StringPoolViewerClass", L"StringPool Viewer", 800, 600, hInstance);
 	a.SetOnCreate(OnCreate);
-	a.SetOnCommand(OnCommand);
+	a.SetOnCommandEx(OnCommandEx);
 	a.SetOnNotify(OnNotify);
 	a.SetOnDropFile(OnDropFile);
 	a.Run();
