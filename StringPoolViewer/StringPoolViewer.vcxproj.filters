@@ -42,6 +42,9 @@
     <ClCompile Include="Frost.cpp">
       <Filter>ソース ファイル\Lib</Filter>
     </ClCompile>
+    <ClCompile Include="AobScan.cpp">
+      <Filter>ソース ファイル\Lib</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Simple.h">
@@ -54,6 +57,9 @@
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
     <ClInclude Include="Frost.h">
+      <Filter>ヘッダー ファイル\Lib</Filter>
+    </ClInclude>
+    <ClInclude Include="AobScan.h">
       <Filter>ヘッダー ファイル\Lib</Filter>
     </ClInclude>
   </ItemGroup>

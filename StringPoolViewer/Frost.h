@@ -25,6 +25,8 @@ public:
 	~Frost();
 	bool Parse();
 	ULONG_PTR GetRawAddress(ULONG_PTR uVirtualAddress);
+	ULONG_PTR GetVirtualAddress(ULONG_PTR uRawAddress);
+	ULONG_PTR AobScan(std::wstring wAob);
 	void test();
 };
 

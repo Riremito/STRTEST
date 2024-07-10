@@ -1,4 +1,5 @@
 #include"Frost.h"
+#include"AobScan.h"
 
 // public
 Frost::Frost(const WCHAR *wPath) {
@@ -109,6 +110,51 @@ ULONG_PTR Frost::GetRawAddress(ULONG_PTR uVirtualAddress) {
 			return uVirtualAddress - section_start + image_section_headers[i].PointerToRawData + (ULONG_PTR)input_file_data; // file offset
 		}
 	}
+	return 0;
+}
+
+ULONG_PTR Frost::GetVirtualAddress(ULONG_PTR uRawAddress) {
+	if (!ImageBase) {
+		return 0;
+	}
+
+	for (size_t i = 0; image_section_headers.size(); i++) {
+		ULONG_PTR section_start = (ULONG_PTR)input_file_data + image_section_headers[i].PointerToRawData;
+		ULONG_PTR section_end = section_start + image_section_headers[i].SizeOfRawData;
+
+		// convert
+		if (section_start <= uRawAddress && uRawAddress <= section_end) {
+			return ImageBase + image_section_headers[i].VirtualAddress + (uRawAddress - section_start); // VA
+		}
+	}
+	return 0;
+}
+
+
+ULONG_PTR Frost::AobScan(std::wstring wAob) {
+	::AobScan aob(wAob);
+	if (!ImageBase) {
+		return 0;
+	}
+
+	size_t aob_size = aob.size();
+	if (aob_size == 0) {
+		return 0;
+	}
+
+	if (!image_section_headers.size()) {
+		return 0;
+	}
+
+	ULONG_PTR uStartAddr = (ULONG_PTR)input_file_data + image_section_headers[0].PointerToRawData;
+	ULONG_PTR uEndAddr = uStartAddr + image_section_headers[0].SizeOfRawData - aob_size;
+
+	for (ULONG_PTR uAddr = uStartAddr; uAddr < uEndAddr; uAddr++) {
+		if (aob.Compare(uAddr)) {
+			return GetVirtualAddress(uAddr);
+		}
+	}
+
 	return 0;
 }
 

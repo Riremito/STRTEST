@@ -5,9 +5,6 @@
 
 // string pool part
 BYTE StringPool__ms_aKey[16] = { 0xD6,0xDE,0x75,0x86,0x46,0x64,0xA3,0x71,0xE8,0xE6,0x7B,0xD3,0x33,0x30,0xE7,0x2E };
-const int StringPool__ms_nKeySize = sizeof(StringPool__ms_aKey);
-ULONG_PTR StringPool__ms_aString = 0x1474C4240;
-int StringPool_Size = 17168;
 
 // data to string part
 std::wstring BYTEtoString(BYTE b) {
@@ -43,21 +40,6 @@ std::wstring DWORDtoString(DWORD dw) {
 	return wdw;
 }
 
-std::wstring DatatoString(BYTE *b, ULONG_PTR Length, bool space) {
-	std::wstring wdata;
-
-	for (ULONG_PTR i = 0; i < Length; i++) {
-		if (space) {
-			if (i) {
-				wdata.push_back(L' ');
-			}
-		}
-		wdata += BYTEtoString(b[i]);
-	}
-
-	return wdata;
-}
-
 std::wstring QWORDtoString(ULONG_PTR u) {
 	std::wstring wdw;
 
@@ -72,30 +54,6 @@ std::wstring QWORDtoString(ULONG_PTR u) {
 	return wdw;
 }
 
-bool to_wstring(UINT codepage, std::vector<BYTE> &str, std::wstring &utf16) {
-	try {
-		// UTF16へ変換する際の必要なバイト数を取得
-		int len = MultiByteToWideChar(codepage, 0, (char *)&str[0], -1, 0, 0);
-		if (!len) {
-			return false;
-		}
-
-		// UTF16へ変換
-		std::vector<BYTE> b((len + 1) * sizeof(WORD));
-		if (!MultiByteToWideChar(codepage, 0, (char *)&str[0], -1, (WCHAR *)&b[0], len)) {
-			return false;
-		}
-
-		utf16 = std::wstring((WCHAR *)&b[0]);
-		return true;
-	}
-	catch (...) {
-		return false;
-	}
-
-	return true;
-}
-
 // gui part
 enum SubControl {
 	RESERVED,
@@ -108,7 +66,7 @@ enum SubControl {
 	EDIT_PATH,
 	EDIT_ADDR_ARRAY,
 	EDIT_CODEPAGE,
-	EDIT_ADDR_SIZE,
+	EDIT_ARRAY_SIZE,
 	COMBOBOX_CODEPAGE,
 	BUTTON_AOBSCAN,
 	BUTTON_LOAD,
@@ -157,11 +115,38 @@ bool LoadDataThread() {
 		return false;
 	}
 
+	// AobScan
+	if (uStringPoolArrayAddr == 0) {
+		ULONG_PTR uStringPoolRefAddr = f.AobScan(L"48 8D ?? ?? ?? ?? ?? 48 8B ?? C? 4? 0F BE 2? 4?"); // JMS v425.1, TWMS v261.4
+		if (!uStringPoolRefAddr) {
+			uStringPoolRefAddr = f.AobScan(L"48 8D ?? ?? ?? ?? ?? 4? 8? ?? C? 4? 8B 2? 48"); // KMS v2.388.3
+		}
+		if (uStringPoolRefAddr) {
+			uStringPoolArrayAddr = uStringPoolRefAddr + *(signed long int *)f.GetRawAddress(uStringPoolRefAddr + 0x03) + 0x07;
+			a.AddText(TEXTAREA_INFO, L"AobScan result = " + QWORDtoString(uStringPoolArrayAddr));
+			a.SetText(EDIT_ADDR_ARRAY, QWORDtoString(uStringPoolArrayAddr));
+		}
+		if (uStringPoolArrayAddr == 0) {
+			gThreadArg.OK = true;
+			a.AddText(TEXTAREA_INFO, L"AobScan failed.");
+			return false;
+		}
+	}
+
 	ULONG_PTR *StringPoolArray = (ULONG_PTR *)f.GetRawAddress(uStringPoolArrayAddr);
 	StringPool sp(codepage, StringPool__ms_aKey, 16);
 
 	for (int i = 0; i < ArraySize; i++) {
 		StringPoolData *spd = (StringPoolData *)f.GetRawAddress(StringPoolArray[i]);
+		if (!spd) {
+			a.AddText(TEXTAREA_INFO, L"something wrong!");
+			break;
+		}
+		if (strncmp((char *)&spd->shift, "SID_", 4) == 0 || strncmp((char *)&spd->shift, " _-:", 4) == 0) {
+			a.AddText(TEXTAREA_INFO, L"Size seems wrong. real size = " + std::to_wstring(i));
+			a.SetText(EDIT_ARRAY_SIZE, std::to_wstring(i));
+			break;
+		}
 		std::wstring wtext = sp.DecodeWStr(spd);
 		a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_ID, std::to_wstring(i));
 		a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_VA, QWORDtoString(StringPoolArray[i]));
@@ -209,7 +194,7 @@ bool OnCreate(Alice &a) {
 	a.StaticText(STATIC_ADDR_CODEPAGE,   L"CP    :", 400, 490);
 	a.StaticText(STATIC_ADDR_SIZE,  L"Size  :", 400, 510);
 	a.EditBox(EDIT_PATH,       450, 450, L"Please Drop File", 300);
-	a.EditBox(EDIT_ADDR_ARRAY, 450, 470, L"1474C4240", 300);
+	a.EditBox(EDIT_ADDR_ARRAY, 450, 470, L"0", 300);
 	a.ComboBox(COMBOBOX_CODEPAGE, 450, 490, 80);
 	a.ComboBoxAdd(COMBOBOX_CODEPAGE, L"BIG5");
 	a.ComboBoxAdd(COMBOBOX_CODEPAGE, L"EUC-KR");
@@ -218,7 +203,8 @@ bool OnCreate(Alice &a) {
 	a.ComboBoxAdd(COMBOBOX_CODEPAGE, L"UTF8");
 	a.ComboBoxSelect(COMBOBOX_CODEPAGE, 0);
 	a.EditBox(EDIT_CODEPAGE, 550, 490, L"65001", 200);
-	a.EditBox(EDIT_ADDR_SIZE,  450, 510, L"17168", 300);
+	a.EditBox(EDIT_ARRAY_SIZE,  450, 510, L"30000", 300);
+	a.Button(BUTTON_SCAN, L"Scan", 580, 530, 50);
 	a.Button(BUTTON_DUMP, L"Dump", 640, 530, 50);
 	a.Button(BUTTON_LOAD, L"Load", 700, 530, 50);
 	return true;
@@ -257,7 +243,7 @@ bool OnCommandEx(Alice &a, int nIDDlgItem, int msg) {
 		ULONG_PTR addr_array = 0;
 		swscanf_s(text_array.c_str(), L"%llX", &addr_array);
 		std::wstring text_cp = a.GetText(EDIT_CODEPAGE);
-		std::wstring text_size = a.GetText(EDIT_ADDR_SIZE);
+		std::wstring text_size = a.GetText(EDIT_ARRAY_SIZE);
 		a.ListView_Clear(LISTVIEW_VIEWER);
 		LoadData(a, path, addr_array, _wtoi(text_size.c_str()), _wtoi(text_cp.c_str()));
 		return true;
@@ -272,6 +258,14 @@ bool OnCommandEx(Alice &a, int nIDDlgItem, int msg) {
 			fclose(fp);
 		}
 		a.SetText(TEXTAREA_INFO, L"StringPool is dumped!");
+		return true;
+	}
+	if (nIDDlgItem == BUTTON_SCAN) {
+		a.SetText(EDIT_ADDR_ARRAY, L"0");
+		std::wstring path = a.GetText(EDIT_PATH);
+		std::wstring text_cp = a.GetText(EDIT_CODEPAGE);
+		a.ListView_Clear(LISTVIEW_VIEWER);
+		LoadData(a, path, 0, 1, _wtoi(text_cp.c_str()));
 		return true;
 	}
 	return true;
