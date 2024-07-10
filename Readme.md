@@ -1,6 +1,9 @@
 # StringPool Viewer
 ## info
-+ this tool currently only x64 client is supported.
++ this tool supports only x64 unpacked client now.
+	+ neckson stopped packing game client from 1~2 years ago. you do not need to unpack client files.
+	+ this tool does not support memory dump. if you want to use unpacked client, you have to unpack it correctly.
+		+ if you do not have knowledge for unpacking client, please make memory dump and fix section header's RawAddress value to Virtual Address Value.
 + tested
 	+ JMS v425.1
 	+ TWMS v261.4
