@@ -117,9 +117,15 @@ bool LoadDataThread() {
 
 	// AobScan
 	if (uStringPoolArrayAddr == 0) {
-		ULONG_PTR uStringPoolRefAddr = f.AobScan(L"48 8D ?? ?? ?? ?? ?? 48 8B ?? C? 4? 0F BE 2? 4?"); // JMS v425.1, TWMS v261.4
+		ULONG_PTR uStringPoolRefAddr = f.AobScan(L"48 81 EC ?? ?? ?? ?? 4? 8? ?? 48 63 C2 48 8D ?? ?? ?? ?? ?? 4? 8? ?? C?"); // JMS v425.1
+		if (uStringPoolRefAddr) {
+			uStringPoolRefAddr += 0x0D;
+		}
 		if (!uStringPoolRefAddr) {
-			uStringPoolRefAddr = f.AobScan(L"48 8D ?? ?? ?? ?? ?? 4? 8? ?? C? 4? 8B 2? 48"); // KMS v2.388.3
+			uStringPoolRefAddr = f.AobScan(L"48 83 EC ?? 4? 8? ?? 48 63 C2 48 8D ?? ?? ?? ?? ?? 4? 8? ?? C?"); // KMS v2.388.3, MSEA v234.1, TWMS v261.4
+			if (uStringPoolRefAddr) {
+				uStringPoolRefAddr += 0x0A;
+			}
 		}
 		if (uStringPoolRefAddr) {
 			uStringPoolArrayAddr = uStringPoolRefAddr + *(signed long int *)f.GetRawAddress(uStringPoolRefAddr + 0x03) + 0x07;
