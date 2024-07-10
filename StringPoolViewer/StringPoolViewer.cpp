@@ -114,6 +114,7 @@ enum SubControl {
 	BUTTON_LOAD,
 	TEXTAREA_INFO,
 	BUTTON_DUMP,
+	BUTTON_SCAN,
 };
 
 enum ListViewIndex {
@@ -145,19 +146,19 @@ bool LoadDataThread() {
 	UINT codepage = gThreadArg.codepage;
 
 	a.ListView_Clear(LISTVIEW_VIEWER);
-	a.SetText(TEXTAREA_INFO, L"Loading StringPool Data...");
+	a.AddText(TEXTAREA_INFO, L"Loading StringPool Data...");
 	dumpdata.clear();
 
 	Frost f(path.c_str());
 
 	if (!f.Parse()) {
 		gThreadArg.OK = true;
-		a.SetText(TEXTAREA_INFO, L"unable to open exe file.");
+		a.AddText(TEXTAREA_INFO, L"unable to open exe file.");
 		return false;
 	}
 
 	ULONG_PTR *StringPoolArray = (ULONG_PTR *)f.GetRawAddress(uStringPoolArrayAddr);
-	StringPool sp(CP_UTF8, StringPool__ms_aKey, 16);
+	StringPool sp(codepage, StringPool__ms_aKey, 16);
 
 	for (int i = 0; i < ArraySize; i++) {
 		StringPoolData *spd = (StringPoolData *)f.GetRawAddress(StringPoolArray[i]);
@@ -169,9 +170,10 @@ bool LoadDataThread() {
 	}
 
 	gThreadArg.OK = true;
-	a.SetText(TEXTAREA_INFO, L"String Pool is loaded! OK!");
+	a.AddText(TEXTAREA_INFO, L"String Pool is loaded! OK!");
 	return true;
 }
+
 bool LoadData(Alice &a, std::wstring path, ULONG_PTR uStringPoolArrayAddr, int ArraySize, UINT codepage) {
 	if (!gThreadArg.OK) {
 		return false;
@@ -298,7 +300,7 @@ bool OnDropFile(Alice &a, wchar_t *drop) {
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow) {
 	gThreadArg.OK = true;
-	Alice a(L"StringPoolViewerClass", L"StringPool Viewer", 800, 600, hInstance);
+	Alice a(L"StringPoolViewerClass", L"StringPool Viewer", VIEWER_WIDTH, VIEWER_HEIGHT, hInstance);
 	a.SetOnCreate(OnCreate);
 	a.SetOnCommandEx(OnCommandEx);
 	a.SetOnNotify(OnNotify);
