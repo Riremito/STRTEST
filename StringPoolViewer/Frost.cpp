@@ -97,7 +97,7 @@ bool Frost::Parse() {
 }
 
 ULONG_PTR Frost::GetRawAddress(ULONG_PTR uVirtualAddress) {
-	if (!ImageBase) {
+	if (!ImageBase || !uVirtualAddress) {
 		return 0;
 	}
 
