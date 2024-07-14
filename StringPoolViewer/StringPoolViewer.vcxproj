@@ -146,6 +146,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="AobScan.cpp" />
+    <ClCompile Include="AobScanner.cpp" />
+    <ClCompile Include="Formatter.cpp" />
     <ClCompile Include="Frost.cpp" />
     <ClCompile Include="SimpleGUI.cpp" />
     <ClCompile Include="SimpleGUICallback.cpp" />
@@ -156,6 +158,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AobScan.h" />
+    <ClInclude Include="AobScanner.h" />
+    <ClInclude Include="Formatter.h" />
     <ClInclude Include="Frost.h" />
     <ClInclude Include="Simple.h" />
     <ClInclude Include="SimpleGUI.h" />

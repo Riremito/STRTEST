@@ -2,57 +2,8 @@
 #include"Simple.h"
 #include"Frost.h"
 #include"StringPool.h"
-
-// string pool part
-BYTE StringPool__ms_aKey[16] = { 0xD6,0xDE,0x75,0x86,0x46,0x64,0xA3,0x71,0xE8,0xE6,0x7B,0xD3,0x33,0x30,0xE7,0x2E };
-
-// data to string part
-std::wstring BYTEtoString(BYTE b) {
-	std::wstring wb;
-	WCHAR high = (b >> 4) & 0x0F;
-	WCHAR low = b & 0x0F;
-
-	high += (high <= 0x09) ? 0x30 : 0x37;
-	low += (low <= 0x09) ? 0x30 : 0x37;
-
-	wb.push_back(high);
-	wb.push_back(low);
-
-	return wb;
-}
-
-std::wstring WORDtoString(WORD w) {
-	std::wstring ww;
-
-	ww += BYTEtoString((w >> 8) & 0xFF);
-	ww += BYTEtoString(w & 0xFF);
-
-	return ww;
-}
-
-std::wstring DWORDtoString(DWORD dw) {
-	std::wstring wdw;
-
-	wdw += BYTEtoString((dw >> 24) & 0xFF);
-	wdw += BYTEtoString((dw >> 16) & 0xFF);
-	wdw += BYTEtoString((dw >> 8) & 0xFF);
-	wdw += BYTEtoString(dw & 0xFF);
-	return wdw;
-}
-
-std::wstring QWORDtoString(ULONG_PTR u) {
-	std::wstring wdw;
-
-	wdw += BYTEtoString((u >> 56) & 0xFF);
-	wdw += BYTEtoString((u >> 48) & 0xFF);
-	wdw += BYTEtoString((u >> 40) & 0xFF);
-	wdw += BYTEtoString((u >> 32) & 0xFF);
-	wdw += BYTEtoString((u >> 24) & 0xFF);
-	wdw += BYTEtoString((u >> 16) & 0xFF);
-	wdw += BYTEtoString((u >> 8) & 0xFF);
-	wdw += BYTEtoString(u & 0xFF);
-	return wdw;
-}
+#include"Formatter.h"
+#include"AobScanner.h"
 
 // gui part
 enum SubControl {
@@ -60,10 +11,12 @@ enum SubControl {
 	LISTVIEW_VIEWER,
 	EDIT_SELECTED,
 	STATIC_PATH,
+	STATIC_ADDR_KEY,
 	STATIC_ADDR_ARRAY,
 	STATIC_ADDR_CODEPAGE,
 	STATIC_ADDR_SIZE,
 	EDIT_PATH,
+	EDIT_ADDR_KEY,
 	EDIT_ADDR_ARRAY,
 	EDIT_CODEPAGE,
 	EDIT_ARRAY_SIZE,
@@ -89,83 +42,138 @@ typedef struct {
 	bool OK;
 	Alice *a;
 	std::wstring path;
-	ULONG_PTR uStringPoolArrayAddr;
+	ULONG_PTR Addr_Key;
+	ULONG_PTR Addr_Array;
 	int ArraySize;
 	UINT codepage;
 } ThreadArg;
 
 ThreadArg gThreadArg;
 std::vector<std::wstring> dumpdata;
+#define ADDINFO(str) a.AddText(TEXTAREA_INFO, str)
+#define SCANINFO(asr) ADDINFO(L"[" #asr L"]\r\nAddress: " + (f.Isx64() ? QWORDtoString(asr.VA, true) : DWORDtoString((DWORD)asr.VA)) + L"\r\nOffset : " + DWORDtoString((DWORD)asr._RRA))
+#define ADDRTOSTRING(ai) (f.Isx64() ? QWORDtoString(ai.VA, true) : DWORDtoString((DWORD)ai.VA))
+
+bool AccessTest(ULONG_PTR uAddr) {
+	__try {
+		if (IsBadReadPtr((void *)uAddr, 2)) {
+			return false;
+		}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {
+		return false;
+	}
+
+	return true;
+}
+
 bool LoadDataThread() {
 	Alice &a = *gThreadArg.a;
 	std::wstring path = gThreadArg.path;
-	ULONG_PTR uStringPoolArrayAddr = gThreadArg.uStringPoolArrayAddr;
+	ULONG_PTR uAddrKey = gThreadArg.Addr_Key;
+	ULONG_PTR uAddrArray = gThreadArg.Addr_Array;
 	int ArraySize = gThreadArg.ArraySize;
 	UINT codepage = gThreadArg.codepage;
 
 	a.ListView_Clear(LISTVIEW_VIEWER);
-	a.AddText(TEXTAREA_INFO, L"Loading StringPool Data...");
+	ADDINFO(L"Loading...");
 	dumpdata.clear();
 
 	Frost f(path.c_str());
 
 	if (!f.Parse()) {
 		gThreadArg.OK = true;
-		a.AddText(TEXTAREA_INFO, L"unable to open exe file.");
+		ADDINFO(L"Error! unable to open exe file.");
 		return false;
 	}
 
-	// AobScan
-	if (uStringPoolArrayAddr == 0) {
-		ULONG_PTR uStringPoolRefAddr = f.AobScan(L"48 81 EC ?? ?? ?? ?? 4? 8? ?? 48 63 C2 48 8D ?? ?? ?? ?? ?? 4? 8? ?? C?"); // JMS v425.1
-		if (uStringPoolRefAddr) {
-			uStringPoolRefAddr += 0x0D;
-		}
-		if (!uStringPoolRefAddr) {
-			uStringPoolRefAddr = f.AobScan(L"48 83 EC ?? 4? 8? ?? 48 63 C2 48 8D ?? ?? ?? ?? ?? 4? 8? ?? C?"); // KMS v2.388.3, MSEA v234.1, TWMS v261.4
-			if (uStringPoolRefAddr) {
-				uStringPoolRefAddr += 0x0A;
-			}
-		}
-		if (uStringPoolRefAddr) {
-			uStringPoolArrayAddr = uStringPoolRefAddr + *(signed long int *)f.GetRawAddress(uStringPoolRefAddr + 0x03) + 0x07;
-			a.AddText(TEXTAREA_INFO, L"AobScan result = " + QWORDtoString(uStringPoolArrayAddr));
-			a.SetText(EDIT_ADDR_ARRAY, QWORDtoString(uStringPoolArrayAddr));
-		}
-		if (uStringPoolArrayAddr == 0) {
+	AddrInfo StringPool__ms_aKey = { 0 };
+	if (!uAddrKey) {
+		ADDINFO(L"checking KEY...");
+		StringPool__ms_aKey = FindDecKEY(f);
+		if (!StringPool__ms_aKey.VA) {
 			gThreadArg.OK = true;
-			a.AddText(TEXTAREA_INFO, L"AobScan failed.");
+			ADDINFO(L"Error! KEY not found.");
 			return false;
 		}
+		a.SetText(EDIT_ADDR_KEY, ADDRTOSTRING(StringPool__ms_aKey));
 	}
-
-	ULONG_PTR *StringPoolArray = (ULONG_PTR *)f.GetRawAddress(uStringPoolArrayAddr);
-	StringPool sp(codepage, StringPool__ms_aKey, 16);
-
-	for (int i = 0; i < ArraySize; i++) {
-		StringPoolData *spd = (StringPoolData *)f.GetRawAddress(StringPoolArray[i]);
-		if (!spd) {
-			a.AddText(TEXTAREA_INFO, L"something wrong!");
-			break;
-		}
-		if (strncmp((char *)&spd->shift, "SID_", 4) == 0 || strncmp((char *)&spd->shift, " _-:", 4) == 0) {
-			a.AddText(TEXTAREA_INFO, L"Size seems wrong. real size = " + std::to_wstring(i));
-			a.SetText(EDIT_ARRAY_SIZE, std::to_wstring(i));
-			break;
-		}
-		std::wstring wtext = sp.DecodeWStr(spd);
-		a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_ID, std::to_wstring(i));
-		a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_VA, QWORDtoString(StringPoolArray[i]));
-		a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_STRING, L"\"" + wtext + L"\"");
-		dumpdata.push_back(std::to_wstring(i) + L" | " + QWORDtoString(StringPoolArray[i]) + L" | " + L"\"" + wtext + L"\"");
+	else {
+		StringPool__ms_aKey = f.GetAddrInfo(uAddrKey);
 	}
+	SCANINFO(StringPool__ms_aKey);
 
+	AddrInfo StringPool__Array = { 0 };
+	if (!uAddrArray) {
+		ADDINFO(L"finding Array...");
+		StringPool__Array = FindArray(f);
+		if (!StringPool__Array.VA) {
+			gThreadArg.OK = true;
+			ADDINFO(L"Error! Array not found");
+			return false;
+		}
+		a.SetText(EDIT_ADDR_ARRAY, ADDRTOSTRING(StringPool__Array));
+	}
+	else {
+		StringPool__Array = f.GetAddrInfo(uAddrArray);
+	}
+	SCANINFO(StringPool__Array);
+
+	ADDINFO(L"loading...");
+	StringPool sp(codepage, (BYTE *)StringPool__ms_aKey.RA, 16);
+	if (f.Isx64()) {
+		ULONG_PTR *StringPool__Array64 = (ULONG_PTR *)StringPool__Array.RA;
+		for (int i = 0; i < ArraySize; i++) {
+			StringPoolData *spd = (StringPoolData *)f.GetRawAddress(StringPool__Array64[i]);
+			if (!spd) {
+				ADDINFO(L"Warning! Array reached null ptr. size = " + std::to_wstring(i));
+				a.SetText(EDIT_ARRAY_SIZE, std::to_wstring(i));
+				break;
+			}
+			if (strncmp((char *)&spd->shift, "SID_", 4) == 0 || strncmp((char *)&spd->shift, " _-:", 4) == 0) {
+				ADDINFO(L"Warning! Array size seems wrong. real size = " + std::to_wstring(i));
+				a.SetText(EDIT_ARRAY_SIZE, std::to_wstring(i));
+				break;
+			}
+			std::wstring wtext = sp.DecodeWStr(spd);
+			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_ID, std::to_wstring(i));
+			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_VA, QWORDtoString(StringPool__Array64[i], true));
+			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_STRING, L"\"" + wtext + L"\"");
+			dumpdata.push_back(std::to_wstring(i) + L" | " + QWORDtoString(StringPool__Array64[i], true) + L" | " + L"\"" + wtext + L"\"");
+		}
+	}
+	else {
+		DWORD *StringPool__Array32 = (DWORD *)StringPool__Array.RA;
+		for (int i = 0; i < ArraySize; i++) {
+			StringPoolData *spd = (StringPoolData *)f.GetRawAddress(StringPool__Array32[i]);
+			if (!AccessTest((ULONG_PTR)spd)) {
+				ADDINFO(L"Error! Array reached invalid ptr. size = " + std::to_wstring(i));
+				a.SetText(EDIT_ARRAY_SIZE, std::to_wstring(i));
+				break;
+			}
+			if (!spd) {
+				ADDINFO(L"Warning! Array reached null ptr. size = " + std::to_wstring(i));
+				a.SetText(EDIT_ARRAY_SIZE, std::to_wstring(i));
+				break;
+			}
+			if (strncmp((char *)&spd->shift, "SID_", 4) == 0 || strncmp((char *)&spd->shift, " _-:", 4) == 0) {
+				ADDINFO(L"Warning! Array size seems wrong. real size = " + std::to_wstring(i));
+				a.SetText(EDIT_ARRAY_SIZE, std::to_wstring(i));
+				break;
+			}
+			std::wstring wtext = sp.DecodeWStr(spd);
+			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_ID, std::to_wstring(i));
+			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_VA, DWORDtoString(StringPool__Array32[i]));
+			a.ListView_AddItemWOS(LISTVIEW_VIEWER, LV_STRING, L"\"" + wtext + L"\"");
+			dumpdata.push_back(std::to_wstring(i) + L" | " + DWORDtoString(StringPool__Array32[i]) + L" | " + L"\"" + wtext + L"\"");
+		}
+	}
 	gThreadArg.OK = true;
-	a.AddText(TEXTAREA_INFO, L"String Pool is loaded! OK!");
+	ADDINFO(L"OK!");
 	return true;
 }
 
-bool LoadData(Alice &a, std::wstring path, ULONG_PTR uStringPoolArrayAddr, int ArraySize, UINT codepage) {
+bool LoadData(Alice &a, std::wstring path, ULONG_PTR uAddrKey, ULONG_PTR uAddrArray, int ArraySize, UINT codepage) {
 	if (!gThreadArg.OK) {
 		return false;
 	}
@@ -173,7 +181,8 @@ bool LoadData(Alice &a, std::wstring path, ULONG_PTR uStringPoolArrayAddr, int A
 	gThreadArg.OK = false;
 	gThreadArg.a = &a;
 	gThreadArg.path = path;
-	gThreadArg.uStringPoolArrayAddr = uStringPoolArrayAddr;
+	gThreadArg.Addr_Key = uAddrKey;
+	gThreadArg.Addr_Array = uAddrArray;
 	gThreadArg.ArraySize = ArraySize;
 	gThreadArg.codepage = codepage;
 
@@ -196,23 +205,25 @@ bool OnCreate(Alice &a) {
 	a.ReadOnly(TEXTAREA_INFO);
 
 	a.StaticText(STATIC_PATH,       L"Path  :", 400, 450);
-	a.StaticText(STATIC_ADDR_ARRAY, L"Array :", 400, 470);
-	a.StaticText(STATIC_ADDR_CODEPAGE,   L"CP    :", 400, 490);
-	a.StaticText(STATIC_ADDR_SIZE,  L"Size  :", 400, 510);
+	a.StaticText(STATIC_ADDR_KEY,   L"KEY   :", 400, 470);
+	a.StaticText(STATIC_ADDR_ARRAY, L"Array :", 400, 490);
+	a.StaticText(STATIC_ADDR_CODEPAGE,   L"CP    :", 400, 510);
+	a.StaticText(STATIC_ADDR_SIZE,  L"Size  :", 400, 530);
 	a.EditBox(EDIT_PATH,       450, 450, L"Please Drop File", 300);
-	a.EditBox(EDIT_ADDR_ARRAY, 450, 470, L"0", 300);
-	a.ComboBox(COMBOBOX_CODEPAGE, 450, 490, 80);
+	a.EditBox(EDIT_ADDR_KEY, 450, 470, L"0", 300);
+	a.EditBox(EDIT_ADDR_ARRAY, 450, 490, L"0", 300);
+	a.ComboBox(COMBOBOX_CODEPAGE, 450, 510, 80);
 	a.ComboBoxAdd(COMBOBOX_CODEPAGE, L"BIG5");
 	a.ComboBoxAdd(COMBOBOX_CODEPAGE, L"EUC-KR");
 	a.ComboBoxAdd(COMBOBOX_CODEPAGE, L"GBK");
 	a.ComboBoxAdd(COMBOBOX_CODEPAGE, L"SHIFT-JIS");
 	a.ComboBoxAdd(COMBOBOX_CODEPAGE, L"UTF8");
 	a.ComboBoxSelect(COMBOBOX_CODEPAGE, 0);
-	a.EditBox(EDIT_CODEPAGE, 550, 490, L"65001", 200);
-	a.EditBox(EDIT_ARRAY_SIZE,  450, 510, L"30000", 300);
-	a.Button(BUTTON_SCAN, L"Scan", 580, 530, 50);
-	a.Button(BUTTON_DUMP, L"Dump", 640, 530, 50);
-	a.Button(BUTTON_LOAD, L"Load", 700, 530, 50);
+	a.EditBox(EDIT_CODEPAGE, 550, 510, L"65001", 200);
+	a.EditBox(EDIT_ARRAY_SIZE,  450, 530, L"30000", 300);
+	a.Button(BUTTON_SCAN, L"Scan", 580, 550, 50);
+	a.Button(BUTTON_DUMP, L"Dump", 640, 550, 50);
+	a.Button(BUTTON_LOAD, L"Load", 700, 550, 50);
 	return true;
 }
 
@@ -245,13 +256,16 @@ bool OnCommandEx(Alice &a, int nIDDlgItem, int msg) {
 	}
 	if (nIDDlgItem == BUTTON_LOAD) {
 		std::wstring path = a.GetText(EDIT_PATH);
+		std::wstring text_key = a.GetText(EDIT_ADDR_KEY);
+		ULONG_PTR addr_key = 0;
+		swscanf_s(text_key.c_str(), L"%llX", &addr_key);
 		std::wstring text_array = a.GetText(EDIT_ADDR_ARRAY);
 		ULONG_PTR addr_array = 0;
 		swscanf_s(text_array.c_str(), L"%llX", &addr_array);
 		std::wstring text_cp = a.GetText(EDIT_CODEPAGE);
 		std::wstring text_size = a.GetText(EDIT_ARRAY_SIZE);
 		a.ListView_Clear(LISTVIEW_VIEWER);
-		LoadData(a, path, addr_array, _wtoi(text_size.c_str()), _wtoi(text_cp.c_str()));
+		LoadData(a, path, addr_key, addr_array, _wtoi(text_size.c_str()), _wtoi(text_cp.c_str()));
 		return true;
 	}
 	if (nIDDlgItem == BUTTON_DUMP && dumpdata.size() && gThreadArg.OK == true) {
@@ -267,11 +281,13 @@ bool OnCommandEx(Alice &a, int nIDDlgItem, int msg) {
 		return true;
 	}
 	if (nIDDlgItem == BUTTON_SCAN) {
+		a.SetText(EDIT_ADDR_KEY, L"0");
 		a.SetText(EDIT_ADDR_ARRAY, L"0");
 		std::wstring path = a.GetText(EDIT_PATH);
 		std::wstring text_cp = a.GetText(EDIT_CODEPAGE);
 		a.ListView_Clear(LISTVIEW_VIEWER);
-		LoadData(a, path, 0, 1, _wtoi(text_cp.c_str()));
+		a.SetText(EDIT_ARRAY_SIZE, L"30000");
+		LoadData(a, path, 0, 0, 5, _wtoi(text_cp.c_str()));
 		return true;
 	}
 	return true;

@@ -10,6 +10,7 @@ Frost::Frost(const WCHAR *wPath) {
 	input_file_size_high = 0;
 	input_file_data = 0;
 	ImageBase = 0;
+	is_x64 = false;
 }
 
 Frost::~Frost() {
@@ -55,19 +56,47 @@ bool Frost::Parse() {
 	}
 	// x86
 	if (inh->FileHeader.Machine == IMAGE_FILE_MACHINE_I386) {
-		return false;
-	}
-	// x64
-	else if (inh->FileHeader.Machine == IMAGE_FILE_MACHINE_AMD64) {
-		// not coded yet
-		if (inh->FileHeader.SizeOfOptionalHeader < sizeof(IMAGE_OPTIONAL_HEADER64) - (sizeof(IMAGE_DATA_DIRECTORY) * IMAGE_NUMBEROF_DIRECTORY_ENTRIES)) {
+		IMAGE_NT_HEADERS32 *inh32 = (IMAGE_NT_HEADERS32 *)inh;
+		if (inh32->FileHeader.SizeOfOptionalHeader < sizeof(IMAGE_OPTIONAL_HEADER32) - (sizeof(IMAGE_DATA_DIRECTORY) * IMAGE_NUMBEROF_DIRECTORY_ENTRIES)) {
 			return false;
 		}
-		req_size += inh->FileHeader.SizeOfOptionalHeader;
+		req_size += inh32->FileHeader.SizeOfOptionalHeader;
 		if (input_file_size < req_size) {
 			return false;
 		}
-		IMAGE_OPTIONAL_HEADER64 *ioh64 = &inh->OptionalHeader;
+		IMAGE_OPTIONAL_HEADER32 *ioh32 = &inh32->OptionalHeader;
+		if (ioh32->Magic != IMAGE_NT_OPTIONAL_HDR32_MAGIC) {
+			return false;
+		}
+		if (ioh32->NumberOfRvaAndSizes < IMAGE_NUMBEROF_DIRECTORY_ENTRIES) {
+			// not supported now
+			return false;
+		}
+		req_size += sizeof(IMAGE_SECTION_HEADER) * inh32->FileHeader.NumberOfSections;
+		IMAGE_SECTION_HEADER *ish = (IMAGE_SECTION_HEADER *)((ULONG_PTR)ioh32 + inh32->FileHeader.SizeOfOptionalHeader);
+		if (input_file_size < req_size) {
+			return false;
+		}
+		// fixed base addr
+		ImageBase = ioh32->ImageBase;
+		// section info
+		for (WORD i = 0; i < inh32->FileHeader.NumberOfSections; i++) {
+			image_section_headers.push_back(ish[i]);
+		}
+	}
+	// x64
+	else if (inh->FileHeader.Machine == IMAGE_FILE_MACHINE_AMD64) {
+		is_x64 = true;
+		IMAGE_NT_HEADERS64 *inh64 = (IMAGE_NT_HEADERS64 *)inh;
+		// not coded yet
+		if (inh64->FileHeader.SizeOfOptionalHeader < sizeof(IMAGE_OPTIONAL_HEADER64) - (sizeof(IMAGE_DATA_DIRECTORY) * IMAGE_NUMBEROF_DIRECTORY_ENTRIES)) {
+			return false;
+		}
+		req_size += inh64->FileHeader.SizeOfOptionalHeader;
+		if (input_file_size < req_size) {
+			return false;
+		}
+		IMAGE_OPTIONAL_HEADER64 *ioh64 = &inh64->OptionalHeader;
 		if (ioh64->Magic != IMAGE_NT_OPTIONAL_HDR64_MAGIC) {
 			return false;
 		}
@@ -77,15 +106,15 @@ bool Frost::Parse() {
 			return false;
 		}
 		// Section Header
-		req_size += sizeof(IMAGE_SECTION_HEADER) * inh->FileHeader.NumberOfSections;
-		IMAGE_SECTION_HEADER *ish = (IMAGE_SECTION_HEADER *)((ULONG_PTR)ioh64 + inh->FileHeader.SizeOfOptionalHeader);
+		req_size += sizeof(IMAGE_SECTION_HEADER) * inh64->FileHeader.NumberOfSections;
+		IMAGE_SECTION_HEADER *ish = (IMAGE_SECTION_HEADER *)((ULONG_PTR)ioh64 + inh64->FileHeader.SizeOfOptionalHeader);
 		if (input_file_size < req_size) {
 			return false;
 		}
 		// fixed base addr
 		ImageBase = ioh64->ImageBase;
 		// section info
-		for (WORD i = 0; i < inh->FileHeader.NumberOfSections; i++) {
+		for (WORD i = 0; i < inh64->FileHeader.NumberOfSections; i++) {
 			image_section_headers.push_back(ish[i]);
 		}
 	}
@@ -94,6 +123,10 @@ bool Frost::Parse() {
 	}
 
 	return true;
+}
+
+bool Frost::Isx64() {
+	return is_x64;
 }
 
 ULONG_PTR Frost::GetRawAddress(ULONG_PTR uVirtualAddress) {
@@ -131,39 +164,48 @@ ULONG_PTR Frost::GetVirtualAddress(ULONG_PTR uRawAddress) {
 }
 
 
-ULONG_PTR Frost::AobScan(std::wstring wAob) {
+AddrInfo Frost::AobScan(std::wstring wAob) {
+	AddrInfo asr = { 0 };
 	::AobScan aob(wAob);
 	if (!ImageBase) {
-		return 0;
+		return asr;
 	}
 
 	size_t aob_size = aob.size();
 	if (aob_size == 0) {
-		return 0;
+		return asr;
 	}
 
 	if (!image_section_headers.size()) {
-		return 0;
+		return asr;
 	}
 
-	ULONG_PTR uStartAddr = (ULONG_PTR)input_file_data + image_section_headers[0].PointerToRawData;
-	ULONG_PTR uEndAddr = uStartAddr + image_section_headers[0].SizeOfRawData - aob_size;
+	for (auto &v : image_section_headers) {
+		ULONG_PTR uStartAddr = (ULONG_PTR)input_file_data + v.PointerToRawData;
+		ULONG_PTR uEndAddr = uStartAddr + v.SizeOfRawData - aob_size;
 
-	for (ULONG_PTR uAddr = uStartAddr; uAddr < uEndAddr; uAddr++) {
-		if (aob.Compare(uAddr)) {
-			return GetVirtualAddress(uAddr);
+		for (ULONG_PTR uAddr = uStartAddr; uAddr < uEndAddr; uAddr++) {
+			if (aob.Compare(uAddr)) {
+				ULONG_PTR uVA = GetVirtualAddress(uAddr);
+				asr.VA = uVA;
+				asr._RVA = uVA - ImageBase;
+				asr.RA = uAddr;
+				asr._RRA = uAddr - (ULONG_PTR)input_file_data;
+				return asr;
+			}
 		}
 	}
 
-	return 0;
+	return asr;
 }
 
-void Frost::test() {
-	for (auto &v : image_section_headers) {
-		char section_name[9] = { 0 };
-		memcpy_s(section_name, 8, v.Name, 8);
-		printf("%llX : \"%s\"\n", ImageBase + v.VirtualAddress, section_name);
-	}
+AddrInfo Frost::GetAddrInfo(ULONG_PTR uVirtualAddress) {
+	AddrInfo ai = { 0 };
+	ai.VA = uVirtualAddress;
+	ai._RVA = ai.VA - ImageBase;
+	ai.RA = GetRawAddress(uVirtualAddress);
+	ai._RRA = ai.RA - (ULONG_PTR)input_file_data;
+	return ai;
 }
 
 // private

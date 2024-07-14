@@ -6,6 +6,13 @@
 #include<string>
 #include<vector>
 
+typedef struct {
+	ULONG_PTR VA; // Virtual Address
+	ULONG_PTR _RVA; // Virtual Address
+	ULONG_PTR RA; // Raw Address (Opened File Offset)
+	ULONG_PTR _RRA; // File Offset
+} AddrInfo;
+
 class Frost {
 private:
 	// input
@@ -18,16 +25,18 @@ private:
 	// reader
 	ULONG_PTR ImageBase;
 	std::vector<IMAGE_SECTION_HEADER> image_section_headers;
+	bool is_x64;
 
 	bool Open();
 public:
 	Frost(const WCHAR *wPath);
 	~Frost();
 	bool Parse();
+	bool Isx64();
 	ULONG_PTR GetRawAddress(ULONG_PTR uVirtualAddress);
 	ULONG_PTR GetVirtualAddress(ULONG_PTR uRawAddress);
-	ULONG_PTR AobScan(std::wstring wAob);
-	void test();
+	AddrInfo AobScan(std::wstring wAob);
+	AddrInfo GetAddrInfo(ULONG_PTR uVirtualAddress);
 };
 
 #endif
