@@ -106,13 +106,15 @@ bool LoadDataThread() {
 	AddrInfo StringPool__Array = { 0 };
 	if (!uAddrArray) {
 		ADDINFO(L"finding Array...");
-		StringPool__Array = FindArray(f);
+		std::wstring wAobRes;
+		StringPool__Array = FindArray(f, wAobRes);
 		if (!StringPool__Array.VA) {
 			gThreadArg.OK = true;
 			ADDINFO(L"Error! Array not found");
 			return false;
 		}
 		a.SetText(EDIT_ADDR_ARRAY, ADDRTOSTRING(StringPool__Array));
+		ADDINFO(wAobRes);
 	}
 	else {
 		StringPool__Array = f.GetAddrInfo(uAddrArray);

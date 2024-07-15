@@ -4,6 +4,6 @@
 #include"Frost.h"
 
 AddrInfo FindDecKEY(Frost &f);
-AddrInfo FindArray(Frost &f);
+AddrInfo FindArray(Frost &f, std::wstring &msg);
 
 #endif
