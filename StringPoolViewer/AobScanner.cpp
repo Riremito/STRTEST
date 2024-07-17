@@ -19,6 +19,21 @@ AddrInfo FindArray(Frost &f, std::wstring &msg) {
 			msg = L"Aob = TWMS v261";
 			return f.GetAddrInfo(StringPoolRefAddr.VA + 0x0A + *(signed long int *)(StringPoolRefAddr.RA + 0x0A + 0x03) + 0x07);
 		}
+		StringPoolRefAddr = f.AobScan(L"75 ?? 4C 8D 25 ?? ?? ?? ?? 49 8B 04 EC 4C 0F BE 38 BA 08 00 00 00 48 8D 0D ?? ?? ?? ?? E8"); // KMS v2.362.3
+		if (StringPoolRefAddr.VA) {
+			msg = L"Aob = KMS v2.362.3";
+			return f.GetAddrInfo(StringPoolRefAddr.VA + 0x02 + *(signed long int *)(StringPoolRefAddr.RA + 0x02 + 0x03) + 0x07);
+		}
+		StringPoolRefAddr = f.AobScan(L"0F 85 ?? ?? ?? ?? 48 8D 2D ?? ?? ?? ?? 4A 8B 44 FD 00 48 0F BE 18 48 89 5C 24 ?? BA 08 00 00 00 48 8D 0D ?? ?? ?? ?? E8"); // JMS v410.2
+		if (StringPoolRefAddr.VA) {
+			msg = L"Aob = JMS v410.2";
+			return f.GetAddrInfo(StringPoolRefAddr.VA + 0x06 + *(signed long int *)(StringPoolRefAddr.RA + 0x06 + 0x03) + 0x07);
+		}
+		StringPoolRefAddr = f.AobScan(L"0F 85 ?? ?? ?? ?? 4? 8D 2D ?? ?? ?? ?? 4? 8B ?? 2? 48 0F BE 00 48 89 ?? ?? ?? BA 08 00 00 00 48 8D 0D ?? ?? ?? ?? E8"); // JMS v413.1
+		if (StringPoolRefAddr.VA) {
+			msg = L"Aob = JMS v413.1";
+			return f.GetAddrInfo(StringPoolRefAddr.VA + 0x06 + *(signed long int *)(StringPoolRefAddr.RA + 0x06 + 0x03) + 0x07);
+		}
 		return ai;
 	}
 	// x86
