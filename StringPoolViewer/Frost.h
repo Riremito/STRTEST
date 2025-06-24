@@ -28,6 +28,7 @@ private:
 	bool is_x64;
 
 	bool Open();
+	bool MemoryCompare(ULONG_PTR uAddr, ULONG_PTR uMemory, size_t size);
 public:
 	Frost(const WCHAR *wPath);
 	~Frost();
@@ -36,6 +37,9 @@ public:
 	ULONG_PTR GetRawAddress(ULONG_PTR uVirtualAddress);
 	ULONG_PTR GetVirtualAddress(ULONG_PTR uRawAddress);
 	AddrInfo AobScan(std::wstring wAob);
+	AddrInfo ScanString(std::wstring wString);
+	AddrInfo ScanString(std::string sString);
+	AddrInfo ScanValue(ULONG_PTR uValue);
 	AddrInfo GetAddrInfo(ULONG_PTR uVirtualAddress);
 };
 

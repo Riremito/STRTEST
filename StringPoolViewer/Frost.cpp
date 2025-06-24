@@ -199,6 +199,89 @@ AddrInfo Frost::AobScan(std::wstring wAob) {
 	return asr;
 }
 
+
+bool Frost::MemoryCompare(ULONG_PTR uAddr, ULONG_PTR uMemory, size_t size) {
+	for (size_t i = 0; i < size; i++) {
+		if (((BYTE *)uAddr)[i] != ((BYTE *)uMemory)[i]) {
+			return false;
+		}
+	}
+	return true;
+}
+
+AddrInfo Frost::ScanString(std::wstring wString) {
+	AddrInfo asr = { 0 };
+	std::vector<BYTE> target;
+	size_t target_size = (wString.length() + 1) * sizeof(WCHAR);
+	target.resize(target_size);
+	memcpy_s(&target[0], target_size, wString.c_str(), target_size);
+
+	for (auto &v : image_section_headers) {
+		ULONG_PTR uStartAddr = (ULONG_PTR)input_file_data + v.PointerToRawData;
+		ULONG_PTR uEndAddr = uStartAddr + v.SizeOfRawData - target_size;
+
+		for (ULONG_PTR uAddr = uStartAddr; uAddr < uEndAddr; uAddr++) {
+			if (MemoryCompare(uAddr, (ULONG_PTR)&target[0], target_size)) {
+				ULONG_PTR uVA = GetVirtualAddress(uAddr);
+				asr.VA = uVA;
+				asr._RVA = uVA - ImageBase;
+				asr.RA = uAddr;
+				asr._RRA = uAddr - (ULONG_PTR)input_file_data;
+				return asr;
+			}
+		}
+	}
+	return asr;
+}
+
+
+AddrInfo Frost::ScanString(std::string sString) {
+	AddrInfo asr = { 0 };
+	std::vector<BYTE> target;
+	size_t target_size = (sString.length() + 1) * sizeof(char);
+	target.resize(target_size);
+	memcpy_s(&target[0], target_size, sString.c_str(), target_size);
+
+	for (auto &v : image_section_headers) {
+		ULONG_PTR uStartAddr = (ULONG_PTR)input_file_data + v.PointerToRawData;
+		ULONG_PTR uEndAddr = uStartAddr + v.SizeOfRawData - target_size;
+
+		for (ULONG_PTR uAddr = uStartAddr; uAddr < uEndAddr; uAddr++) {
+			if (MemoryCompare(uAddr, (ULONG_PTR)&target[0], target_size)) {
+				ULONG_PTR uVA = GetVirtualAddress(uAddr);
+				asr.VA = uVA;
+				asr._RVA = uVA - ImageBase;
+				asr.RA = uAddr;
+				asr._RRA = uAddr - (ULONG_PTR)input_file_data;
+				return asr;
+			}
+		}
+	}
+	return asr;
+}
+
+AddrInfo Frost::ScanValue(ULONG_PTR uValue) {
+	AddrInfo asr = { 0 };
+	size_t target_size = sizeof(ULONG_PTR);
+
+	for (auto &v : image_section_headers) {
+		ULONG_PTR uStartAddr = (ULONG_PTR)input_file_data + v.PointerToRawData;
+		ULONG_PTR uEndAddr = uStartAddr + v.SizeOfRawData - target_size;
+
+		for (ULONG_PTR uAddr = uStartAddr; uAddr < uEndAddr; uAddr++) {
+			if (MemoryCompare(uAddr, (ULONG_PTR)&uValue, target_size)) {
+				ULONG_PTR uVA = GetVirtualAddress(uAddr);
+				asr.VA = uVA;
+				asr._RVA = uVA - ImageBase;
+				asr.RA = uAddr;
+				asr._RRA = uAddr - (ULONG_PTR)input_file_data;
+				return asr;
+			}
+		}
+	}
+	return asr;
+}
+
 AddrInfo Frost::GetAddrInfo(ULONG_PTR uVirtualAddress) {
 	AddrInfo ai = { 0 };
 	ai.VA = uVirtualAddress;

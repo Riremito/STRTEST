@@ -215,6 +215,8 @@ bool OnCreate(Alice &a) {
 	a.EditBox(EDIT_ADDR_KEY, 450, 470, L"0", 300);
 	a.EditBox(EDIT_ADDR_ARRAY, 450, 490, L"0", 300);
 	a.ComboBox(COMBOBOX_CODEPAGE, 450, 510, 80);
+	a.ComboBoxAdd(COMBOBOX_CODEPAGE, L"Vietnam");
+	a.ComboBoxAdd(COMBOBOX_CODEPAGE, L"Thai");
 	a.ComboBoxAdd(COMBOBOX_CODEPAGE, L"BIG5");
 	a.ComboBoxAdd(COMBOBOX_CODEPAGE, L"EUC-KR");
 	a.ComboBoxAdd(COMBOBOX_CODEPAGE, L"GBK");
@@ -245,6 +247,12 @@ UINT GetCodePage(std::wstring name) {
 	}
 	if (name.compare(L"BIG5") == 0) {
 		return 950;
+	}
+	if (name.compare(L"Thai") == 0) {
+		return 874;
+	}
+	if (name.compare(L"Vietnam") == 0) {
+		return 1258;
 	}
 	return CP_UTF8;
 }
