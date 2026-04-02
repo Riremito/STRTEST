@@ -67,6 +67,26 @@ bool AccessTest(ULONG_PTR uAddr) {
 	return true;
 }
 
+bool toUTF8(UINT codepage, std::string sjis, std::wstring &utf16) {
+	try {
+		int len = MultiByteToWideChar(codepage, 0, sjis.c_str(), -1, 0, 0);
+		if (!len) {
+			return false;
+		}
+		std::vector<BYTE> b((len + 1) * sizeof(WORD));
+		if (!MultiByteToWideChar(codepage, 0, sjis.c_str(), -1, (WCHAR *)&b[0], len)) {
+			return false;
+		}
+		utf16 = std::wstring((WCHAR *)&b[0]);
+		return true;
+	}
+	catch (...) {
+		return false;
+	}
+
+	return true;
+}
+
 bool LoadDataThread() {
 	Alice &a = *gThreadArg.a;
 	std::wstring path = gThreadArg.path;
@@ -123,6 +143,8 @@ bool LoadDataThread() {
 
 	ADDINFO(L"loading...");
 	StringPool sp(codepage, (BYTE *)StringPool__ms_aKey.RA, 16);
+	bool sid_detected = false;
+	size_t stringpool_size = 0;
 	if (f.Isx64()) {
 		ULONG_PTR *StringPool__Array64 = (ULONG_PTR *)StringPool__Array.RA;
 		for (int i = 0; i < ArraySize; i++) {
@@ -132,7 +154,28 @@ bool LoadDataThread() {
 				a.SetText(EDIT_ARRAY_SIZE, std::to_wstring(i));
 				break;
 			}
-			if (strncmp((char *)&spd->shift, "SID_", 4) == 0 || strncmp((char *)&spd->shift, " _-:", 4) == 0) {
+
+			if (!sid_detected && strncmp((char *)&spd->shift, "SID_", 4) == 0) {
+				sid_detected = true;
+				ArraySize *= 2; // x2
+				ADDINFO(L"SID is detected!");
+			}
+			if (sid_detected) {
+				stringpool_size = dumpdata.size();
+				if (sid_detected && stringpool_size * 2 < i) {
+					ADDINFO(L"StringPool = " + std::to_wstring(dumpdata.size()));
+					ADDINFO(L"SID = " + std::to_wstring(i - stringpool_size));
+					break;
+				}
+				sid_detected = true;
+				std::wstring utf16;
+				if (!toUTF8(codepage, (char *)&spd->shift, utf16)) {
+					utf16 = L"ERROR.";
+				}
+				dumpdata[i - stringpool_size] += L" // " + utf16;
+				continue;
+			}
+			if (sid_detected || strncmp((char *)&spd->shift, " _-:", 4) == 0) {
 				ADDINFO(L"Warning! Array size seems wrong. real size = " + std::to_wstring(i));
 				a.SetText(EDIT_ARRAY_SIZE, std::to_wstring(i));
 				break;
@@ -170,6 +213,7 @@ bool LoadDataThread() {
 			dumpdata.push_back(std::to_wstring(i) + L" | " + DWORDtoString(StringPool__Array32[i]) + L" | " + L"\"" + wtext + L"\"");
 		}
 	}
+
 	gThreadArg.OK = true;
 	ADDINFO(L"OK!");
 	return true;
